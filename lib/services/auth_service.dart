@@ -1,3 +1,4 @@
+// lib/services/auth_service.dart
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_client.dart';
@@ -18,17 +19,21 @@ class AuthService {
       'password': password,
     });
 
-    final body = jsonDecode(res.body);
+    late final Map<String, dynamic> body;
+    try {
+      body = Map<String, dynamic>.from(jsonDecode(res.body) as Map);
+    } catch (_) {
+      throw Exception('Bad response (${res.statusCode})');
+    }
+
     if (res.statusCode >= 200 &&
         res.statusCode < 300 &&
-        body is Map &&
         body['success'] == true &&
         body['token'] != null) {
       final token = body['token'] as String;
       final user = Map<String, dynamic>.from(body['user'] ?? {});
       api.setToken(token);
 
-      // persist minimal session fields
       final sp = await SharedPreferences.getInstance();
       if (stayLoggedIn) await sp.setString('auth_token', token);
       await sp.setString('user_type', (user['user_type'] ?? '').toString());
@@ -42,17 +47,11 @@ class AuthService {
             true,
       );
 
-      return {
-        'success': body['success'] == true,
-        'token': token,
-        'user': user, // already Map<String,dynamic>
-      };
+      return {'success': true, 'token': token, 'user': user};
     }
 
-    // bubble up API message if present
-    final msg = (body is Map && body['message'] != null)
-        ? body['message'].toString()
-        : 'Login failed (${res.statusCode})';
+    final msg = (body['message'] ?? 'Login failed (${res.statusCode})')
+        .toString();
     throw Exception(msg);
   }
 
