@@ -5,11 +5,11 @@ import '../../providers/ticket_provider.dart';
 import '../../models/ticket.dart';
 
 class TicketListScreen extends StatefulWidget {
-  /// Optional flags (for future filtering; safe even if provider/model
-  /// doesn’t support these yet)
-  final bool showUnassignedOnly; // Manager: assign unassigned
-  final bool assignedToMe; // Company User: my tickets
-  final bool createdByClientTeam; // Client Manager: tickets by client users
+  /// Optional flags (display + loader selection)
+  final bool showUnassignedOnly; // (future) Manager: assign unassigned
+  final bool assignedToMe; // "My Tickets" for any role
+  final bool
+  createdByClientTeam; // (future) Client Manager: client team tickets
 
   const TicketListScreen({
     super.key,
@@ -23,12 +23,25 @@ class TicketListScreen extends StatefulWidget {
 }
 
 class _TicketListScreenState extends State<TicketListScreen> {
+  Future<void> _load(BuildContext context) async {
+    final prov = context.read<TicketProvider>();
+
+    // - assignedToMe => "My Tickets" (created_by = me for clients; later can extend)
+    // - else         => load everything allowed by role (backend still scopes)
+    if (widget.assignedToMe) {
+      await prov.loadMine();
+    } else {
+      await prov.loadAll();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    // defer until first frame so context is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<TicketProvider>().refresh();
+      _load(context);
     });
   }
 
@@ -42,12 +55,10 @@ class _TicketListScreenState extends State<TicketListScreen> {
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<TicketProvider>();
-    final items = prov.items; // We’ll add real filtering later at provider/API.
+    final items = prov.items;
 
-    final hasFilter =
-        widget.assignedToMe ||
-        widget.showUnassignedOnly ||
-        widget.createdByClientTeam;
+    // Do NOT show the banner when only assignedToMe is active.
+    final hasFilter = widget.showUnassignedOnly || widget.createdByClientTeam;
 
     return Scaffold(
       appBar: AppBar(title: Text(_title())),
@@ -70,13 +81,11 @@ class _TicketListScreenState extends State<TicketListScreen> {
                 spacing: 8,
                 runSpacing: -6,
                 children: [
-                  if (widget.assignedToMe)
-                    const _FilterChipLabel(text: 'assigned_to_me'),
+                  // removed: assigned_to_me chip
                   if (widget.showUnassignedOnly)
                     const _FilterChipLabel(text: 'unassigned_only'),
                   if (widget.createdByClientTeam)
                     const _FilterChipLabel(text: 'client_team'),
-                  const _FilterChipLabel(text: 'UI filter only (MVP step)'),
                 ],
               ),
             ),
@@ -84,14 +93,23 @@ class _TicketListScreenState extends State<TicketListScreen> {
             child: prov.isLoading && items.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : RefreshIndicator(
-                    onRefresh: prov.refresh,
-                    child: ListView.separated(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(12),
-                      itemBuilder: (_, i) => _TicketTile(items[i]),
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
-                      itemCount: items.length,
-                    ),
+                    onRefresh: () => _load(context),
+                    child: items.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: const [
+                              SizedBox(height: 120),
+                              Center(child: Text('No tickets to show')),
+                            ],
+                          )
+                        : ListView.separated(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(12),
+                            itemBuilder: (_, i) => _TicketTile(items[i]),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 8),
+                            itemCount: items.length,
+                          ),
                   ),
           ),
         ],
@@ -151,6 +169,9 @@ class _TicketTile extends StatelessWidget {
             Text('ID: ${t.id}', style: sub),
           ],
         ),
+        onTap: () {
+          // TODOs: push details when available
+        },
       ),
     );
   }

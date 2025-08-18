@@ -13,11 +13,22 @@ class TicketProvider extends ChangeNotifier {
   bool isLoading = false;
   List<Ticket> items = [];
 
-  /// Load current user's tickets
-  Future<void> refresh() async {
+  /// Refresh helper:
+  /// - `refresh()` behaves like your old method (loads "mine").
+  /// - `refresh(onlyMine: true)` -> load only my tickets.
+  /// - `refresh(onlyMine: false)` -> load all tickets allowed by role.
+  Future<void> refresh({bool? onlyMine}) {
+    if (onlyMine == null) return loadMine();
+    return onlyMine ? loadMine() : loadAll();
+  }
+
+  /// Load all tickets allowed by the current role (backend enforces scope).
+  Future<void> loadAll() async {
+    if (isLoading) return;
     isLoading = true;
     notifyListeners();
     try {
+      // Server returns ALL (for system/company admin/manager) or scoped set per role.
       items = await svc.listMine();
     } finally {
       isLoading = false;
@@ -25,7 +36,22 @@ class TicketProvider extends ChangeNotifier {
     }
   }
 
-  /// Create a ticket, then prepend to the list
+  /// Load only tickets relevant to the current user.
+  /// For client_user the server returns only created_by = me.
+  Future<void> loadMine() async {
+    if (isLoading) return;
+    isLoading = true;
+    notifyListeners();
+    try {
+      // Same endpoint; server decides based on logged-in role.
+      items = await svc.listMine();
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Create a ticket, then prepend to the list.
   Future<Ticket> create({
     required String subject,
     required String description,
@@ -35,17 +61,27 @@ class TicketProvider extends ChangeNotifier {
     int? companyId,
     int? clientId,
   }) async {
-    final t = await svc.create(
-      subject: subject,
-      description: description,
-      priorityId: priorityId,
-      categoryId: categoryId,
-      departmentId: departmentId,
-      companyId: companyId,
-      clientId: clientId,
-    );
-    items = [t, ...items];
+    if (isLoading) throw Exception('Already creating a ticket');
+    isLoading = true;
     notifyListeners();
-    return t;
+
+    try {
+      final t = await svc.create(
+        subject: subject,
+        description: description,
+        priorityId: priorityId,
+        categoryId: categoryId,
+        departmentId: departmentId,
+        companyId: companyId,
+        clientId: clientId,
+      );
+      // show new ticket immediately at the top
+      items = [t, ...items];
+      notifyListeners();
+      return t;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 }

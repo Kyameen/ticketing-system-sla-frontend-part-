@@ -21,8 +21,10 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _handleSubmit() async {
+    final form = _formKey.currentState;
+    if (form == null) return;
+    if (!form.validate()) return;
 
     final tickets = context.read<TicketProvider>();
 
@@ -30,14 +32,22 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
       await tickets.create(
         subject: _subjectC.text.trim(),
         description: _descC.text.trim(),
-        // For client users, company/client are derived on backend.
-        // For company/system users you COULD pass companyId/clientId if desired.
       );
+
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Ticket created')));
-      Navigator.of(context).pop(true);
+
+      // 1) clear inputs and keyboard focus
+      _subjectC.clear();
+      _descC.clear();
+      FocusScope.of(context).unfocus();
+
+      // 2) success toast
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ticket created successfully')),
+      );
+
+      // 3) go back and signal success to caller
+      Navigator.of(context).maybePop(true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -48,7 +58,7 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final loading = context.watch<TicketProvider>().isLoading;
+    final isBusy = context.watch<TicketProvider>().isLoading;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Create Ticket')),
@@ -86,11 +96,12 @@ class _CreateTicketScreenState extends State<CreateTicketScreen> {
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
+                    width: double.infinity,
                     height: 46,
                     child: ElevatedButton.icon(
-                      onPressed: loading ? null : _submit,
+                      onPressed: isBusy ? null : _handleSubmit,
                       icon: const Icon(Icons.add),
-                      label: loading
+                      label: isBusy
                           ? const SizedBox(
                               height: 20,
                               width: 20,

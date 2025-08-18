@@ -7,10 +7,19 @@ class TicketService {
   final ApiClient api;
   TicketService(this.api);
 
-  // -------- helpers --------
+  // ---- helpers ----
+  Map<String, dynamic> _safeMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
   Map<String, dynamic> _asMap(String body) {
-    final d = jsonDecode(body);
-    return d is Map ? d.cast<String, dynamic>() : <String, dynamic>{};
+    try {
+      return _safeMap(jsonDecode(body));
+    } catch (_) {
+      return <String, dynamic>{};
+    }
   }
 
   String? _message(String body) {
@@ -23,13 +32,23 @@ class TicketService {
     }
   }
 
-  // GET tickets visible to the current user.
-  // If your backend uses a dedicated route for clients, tweak the path below.
-  // Example alternatives:
-  //   final path = forClient ? '/tickets/mine' : '/tickets';
+  /// GET tickets visible to the current user.
+  /// Always hits `/tickets` and lets the backend scope by role.
+  /// [forClient] is kept for backward compatibility but is ignored.
   Future<List<Ticket>> listMine({bool forClient = false}) async {
-    final path = forClient ? '/tickets?mine=1' : '/tickets';
+    const path = '/tickets';
+
+    // DEBUG
+    // ignore: avoid_print
+    print('[TicketService] GET $path');
+
     final res = await api.get(path);
+
+    // DEBUG
+    // ignore: avoid_print
+    print('[TicketService] -> status=${res.statusCode}');
+    // ignore: avoid_print
+    print('[TicketService] -> body=${res.body}');
 
     if (res.statusCode ~/ 100 != 2) {
       throw Exception(
@@ -37,26 +56,56 @@ class TicketService {
       );
     }
 
-    final map = _asMap(res.body);
-    final list = (map['data'] as List?) ?? const [];
-    return list
-        .map((e) => Ticket.fromJson((e as Map).cast<String, dynamic>()))
-        .toList();
+    // Accept either { data: [...] } or a plain [...]
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(res.body);
+    } catch (_) {
+      decoded = null;
+    }
+
+    List<dynamic> rawList;
+    if (decoded is List) {
+      rawList = decoded;
+    } else if (decoded is Map && decoded['data'] is List) {
+      rawList = decoded['data'] as List;
+    } else {
+      rawList = const [];
+    }
+
+    // Parse defensively: skip any row that fails to decode.
+    final parsed = <Ticket>[];
+    for (final e in rawList) {
+      if (e is Map) {
+        try {
+          parsed.add(Ticket.fromJson(Map<String, dynamic>.from(e)));
+        } catch (err) {
+          // ignore: avoid_print
+          print('[TicketService] skip row parse error: $err');
+        }
+      } else {
+        // ignore: avoid_print
+        print('[TicketService] skip non-map row: $e');
+      }
+    }
+
+    // DEBUG
+    // ignore: avoid_print
+    print('[TicketService] items=${parsed.length}');
+    return parsed;
   }
 
-  // POST /tickets — create a ticket
+  /// POST /tickets — create a ticket
   Future<Ticket> create({
     required String subject,
     required String description,
     int? priorityId,
     int? categoryId,
     int? departmentId,
-    // For client users company_id/client_id are injected on backend.
     int? companyId,
     int? clientId,
-    int? agreementId, // keep if your server needs it; otherwise safe to ignore
   }) async {
-    final body = <String, dynamic>{
+    final payload = <String, dynamic>{
       'subject': subject,
       'description': description,
       if (priorityId != null) 'priority_id': priorityId,
@@ -64,21 +113,49 @@ class TicketService {
       if (departmentId != null) 'department_id': departmentId,
       if (companyId != null) 'company_id': companyId,
       if (clientId != null) 'client_id': clientId,
-      if (agreementId != null) 'agreement_id': agreementId,
     };
 
-    final res = await api.post('/tickets', body);
+    // ApiClient.post expects (path, body)
+    final res = await api.post('/tickets', payload);
 
-    if (res.statusCode ~/ 100 != 2) {
-      throw Exception(
-        _message(res.body) ?? 'Create ticket failed (${res.statusCode})',
-      );
+    // Accept 200/201 as success
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      final text = (res.bodyBytes.isEmpty) ? '' : utf8.decode(res.bodyBytes);
+      try {
+        final m = jsonDecode(text);
+        final msg = (m is Map && m['message'] is String)
+            ? m['message']
+            : 'Failed to create ticket';
+        throw Exception('HTTP ${res.statusCode}: $msg');
+      } catch (_) {
+        throw Exception('HTTP ${res.statusCode}: Failed to create ticket');
+      }
     }
 
-    final map = _asMap(res.body);
-    final data = (map['data'] is Map)
-        ? (map['data'] as Map).cast<String, dynamic>()
-        : <String, dynamic>{};
+    // Safely decode body (some servers send empty/`null` body on 201)
+    final text = (res.bodyBytes.isEmpty) ? '' : utf8.decode(res.bodyBytes);
+    if (text.trim().isEmpty || text.trim() == 'null') {
+      // Minimal object; your Ticket.fromJson should tolerate nulls
+      return Ticket.fromJson({
+        'id': null,
+        'subject': subject,
+        'description': description,
+        'created_at': null,
+        'updated_at': null,
+      });
+    }
+
+    dynamic root;
+    try {
+      root = jsonDecode(text);
+    } catch (_) {
+      throw Exception('Invalid server response while creating ticket');
+    }
+
+    final data = (root is Map && root['data'] != null) ? root['data'] : root;
+    if (data is! Map<String, dynamic>) {
+      throw Exception('Unexpected server response while creating ticket');
+    }
     return Ticket.fromJson(data);
   }
 }

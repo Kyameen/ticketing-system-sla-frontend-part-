@@ -23,22 +23,51 @@ class ClientHomeScreen extends StatelessWidget {
 
     final actions = <Widget>[];
 
+    // ----- Client User actions -----
     if (policy.isClientUser) {
+      // Create Ticket
       actions.add(
         HomeActionButton(
           icon: Icons.add_circle_outline,
           label: 'Create Ticket',
+          onTap: () async {
+            final messenger = ScaffoldMessenger.of(
+              context,
+            ); // capture before await
+            final created = await Navigator.of(context).push<bool>(
+              MaterialPageRoute(builder: (_) => const CreateTicketScreen()),
+            );
+            if (created == true) {
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Ticket created')),
+              );
+            }
+          },
+        ),
+      );
+
+      // My Tickets (only tickets created by this user)
+      actions.add(
+        HomeActionButton(
+          icon: Icons.inbox_outlined,
+          label: 'My Tickets',
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const CreateTicketScreen()),
+              MaterialPageRoute(
+                builder: (_) => const TicketListScreen(
+                  assignedToMe: true, // show only my tickets
+                ),
+              ),
             );
           },
         ),
       );
     }
 
+    // ----- Client Manager actions -----
     if (policy.isClientManager) {
+      // All client-team tickets (you can wire backend filter later)
       actions.add(
         HomeActionButton(
           icon: Icons.list_alt_outlined,
@@ -48,8 +77,25 @@ class ClientHomeScreen extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) => const TicketListScreen(
-                  createdByClientTeam:
-                      true, // optional flag (safe even if ignored)
+                  createdByClientTeam: true, // safe even if ignored for now
+                ),
+              ),
+            );
+          },
+        ),
+      );
+
+      // Client manager's own tickets
+      actions.add(
+        HomeActionButton(
+          icon: Icons.person_outline,
+          label: 'My Tickets',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const TicketListScreen(
+                  assignedToMe: true, // only my tickets
                 ),
               ),
             );
@@ -58,6 +104,7 @@ class ClientHomeScreen extends StatelessWidget {
       );
     }
 
+    // Fallback when no actions available
     if (actions.isEmpty) {
       actions.add(
         HomeActionButton(
