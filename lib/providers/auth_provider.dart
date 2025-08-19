@@ -50,14 +50,49 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  String? lastError;
+
+  /// Self-registration for clients. Returns true on success.
+  Future<bool> doRegister({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      lastError = null;
+      final res = await auth.registerClient(
+        name: name,
+        email: email,
+        password: password,
+      );
+      final ok = (res['success'] == true);
+      if (!ok) {
+        lastError = (res['message']?.toString() ?? 'Registration failed.');
+      }
+      return ok;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> doLogout() async {
-    await auth.logout();
+    // Optimistic UI: flip to logged-out immediately so UI navigates at once.
     isLoggedIn = false;
     userType = '';
     userSubRole = '';
     emailVerified = false;
     displayName = '';
     notifyListeners();
+
+    // Best-effort server + disk cleanup (AuthService clears SharedPreferences and token)
+    try {
+      await auth.logout();
+    } catch (_) {
+      // ignore — we already cleared local state and UI
+    }
   }
 
   String _extractName(Map<String, dynamic> u) {

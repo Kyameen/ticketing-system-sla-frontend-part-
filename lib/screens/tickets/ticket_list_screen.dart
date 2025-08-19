@@ -25,14 +25,8 @@ class TicketListScreen extends StatefulWidget {
 class _TicketListScreenState extends State<TicketListScreen> {
   Future<void> _load(BuildContext context) async {
     final prov = context.read<TicketProvider>();
-
-    // - assignedToMe => "My Tickets" (created_by = me for clients; later can extend)
-    // - else         => load everything allowed by role (backend still scopes)
-    if (widget.assignedToMe) {
-      await prov.loadMine();
-    } else {
-      await prov.loadAll();
-    }
+    // For now: always loadAll(); backend already scopes per role (client_user gets own tickets).
+    await prov.loadAll();
   }
 
   @override

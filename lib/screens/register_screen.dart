@@ -2,35 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
-import 'role_router.dart';
-import 'register_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailC = TextEditingController(); // start blank
-  final _passC = TextEditingController(); // start blank
-  bool _stayLoggedIn = true;
+  final _nameC = TextEditingController();
+  final _emailC = TextEditingController();
+  final _passC = TextEditingController();
+  final _confirmC = TextEditingController();
   bool _isSubmitting = false;
   String? _error;
 
   @override
   void dispose() {
+    _nameC.dispose();
     _emailC.dispose();
     _passC.dispose();
+    _confirmC.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (_isSubmitting) return;
-    final formOk = _formKey.currentState?.validate() ?? false;
-    if (!formOk) return;
+    final ok = _formKey.currentState?.validate() ?? false;
+    if (!ok) return;
 
     setState(() {
       _isSubmitting = true;
@@ -39,15 +40,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final auth = context.read<AuthProvider>();
-      await auth.doLogin(_emailC.text.trim(), _passC.text, _stayLoggedIn);
+      final success = await auth.doRegister(
+        name: _nameC.text.trim(),
+        email: _emailC.text.trim(),
+        password: _passC.text,
+      );
 
       if (!mounted) return;
 
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const RoleRouter()));
+      if (success) {
+        // Don’t auto-login; most backends require email verification.
+        await showDialog<void>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Account created'),
+            content: const Text(
+              'Your account has been created. Please check your email to verify your account, then log in.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+
+        // After the dialog closes, pop back to Login
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      } else {
+        setState(() {
+          _error =
+              auth.lastError ??
+              'Registration failed. Please check your details.';
+        });
+      }
     } catch (e) {
-      setState(() => _error = 'Login failed. Please try again.');
+      setState(() => _error = 'Registration failed. Please try again.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -58,8 +89,8 @@ class _LoginScreenState extends State<LoginScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      // Flutter 3.22+: use withValues instead of withOpacity
       backgroundColor: cs.surface.withValues(alpha: 0.98),
+      appBar: AppBar(title: const Text('Create account'), centerTitle: false),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
@@ -75,19 +106,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox(height: 6),
-                    Text(
-                      'Login',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    // Name
+                    TextFormField(
+                      controller: _nameC,
+                      decoration: const InputDecoration(
+                        labelText: 'Full name',
+                        prefixIcon: Icon(Icons.person_outline),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Name is required'
+                          : null,
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
 
                     // Email
                     TextFormField(
                       controller: _emailC,
                       decoration: const InputDecoration(
                         labelText: 'Email',
-                        hintText: 'email',
                         prefixIcon: Icon(Icons.email_outlined),
                         border: OutlineInputBorder(),
                       ),
@@ -105,30 +142,32 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // Password
                     _PasswordField(controller: _passC),
+                    const SizedBox(height: 14),
 
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _stayLoggedIn,
-                          onChanged: (v) =>
-                              setState(() => _stayLoggedIn = v ?? false),
-                        ),
-                        const Text('Stay logged in'),
-                      ],
+                    // Confirm
+                    TextFormField(
+                      controller: _confirmC,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Confirm password',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Please confirm password';
+                        }
+                        if (v != _passC.text) return 'Passwords do not match';
+                        return null;
+                      },
                     ),
+                    const SizedBox(height: 12),
 
                     if (_error != null) ...[
+                      Text(_error!, style: TextStyle(color: cs.error)),
                       const SizedBox(height: 6),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
                     ],
 
-                    const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       height: 44,
@@ -142,31 +181,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text('Login'),
+                            : const Text('Create account'),
                       ),
                     ),
 
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            // TODOs: Forgot password screen
-                          },
-                          child: const Text('Forgot password?'),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RegisterScreen(),
-                              ),
-                            );
-                          },
-                          child: const Text('Create account'),
-                        ),
-                      ],
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Back to login'),
                     ),
                   ],
                 ),
@@ -189,7 +211,6 @@ class _PasswordField extends StatefulWidget {
 
 class _PasswordFieldState extends State<_PasswordField> {
   bool _obscure = true;
-
   @override
   Widget build(BuildContext context) {
     return TextFormField(
@@ -197,7 +218,6 @@ class _PasswordFieldState extends State<_PasswordField> {
       obscureText: _obscure,
       decoration: InputDecoration(
         labelText: 'Password',
-        hintText: 'password',
         prefixIcon: const Icon(Icons.lock_outline),
         border: const OutlineInputBorder(),
         suffixIcon: IconButton(
@@ -209,8 +229,12 @@ class _PasswordFieldState extends State<_PasswordField> {
           ),
         ),
       ),
-      validator: (v) =>
-          (v == null || v.isEmpty) ? 'Password is required' : null,
+      validator: (v) {
+        final s = (v ?? '');
+        if (s.isEmpty) return 'Password is required';
+        if (s.length < 6) return 'Use at least 6 characters';
+        return null;
+      },
     );
   }
 }

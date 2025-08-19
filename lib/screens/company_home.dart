@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/role_policy.dart';
 import '../widgets/home_action_button.dart';
+import 'tickets/ticket_assignments_screen.dart';
 
 // Screens you already have:
 import 'tickets/ticket_list_screen.dart';
@@ -62,14 +63,16 @@ class CompanyHomeScreen extends StatelessWidget {
     if (policy.isCompanyManager) {
       actions.add(
         HomeActionButton(
-          icon: Icons.assignment_outlined,
-          label: 'Assign Unassigned',
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const TicketListScreen(showUnassignedOnly: true),
-            ),
-          ),
+          icon: Icons.assignment_ind_outlined,
+          label: 'Ticket Assignments',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const TicketAssignmentsScreen(),
+              ),
+            );
+          },
         ),
       );
     }

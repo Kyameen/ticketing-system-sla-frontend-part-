@@ -72,4 +72,59 @@ class AuthService {
     api.setToken(token);
     return token != null;
   }
+
+  /// POST /api/register  -> usually returns { success, message, user? }
+  /// We intentionally do NOT auto-login after register (email verify first).
+  /// POST /api/register  -> returns success or validation error.
+  Future<Map<String, dynamic>> registerClient({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final res = await api.post('/register', {
+      'name': name,
+      'email': email,
+      'password': password,
+      'password_confirmation': password,
+      // Important for your RBAC: force client self-registration
+      'user_type': 'client',
+    });
+
+    Map<String, dynamic> body = {};
+    try {
+      if (res.body.isNotEmpty) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map) body = Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {}
+
+    final success = res.statusCode >= 200 && res.statusCode < 300;
+
+    // Try to extract a human message for failures
+    String? message;
+    if (!success) {
+      message = body['message']?.toString();
+      if (message == null && body['errors'] is Map) {
+        final errors = Map<String, dynamic>.from(body['errors']);
+        // pick the first error string we find
+        for (final v in errors.values) {
+          if (v is List && v.isNotEmpty) {
+            message = v.first.toString();
+            break;
+          } else if (v is String && v.isNotEmpty) {
+            message = v;
+            break;
+          }
+        }
+      }
+      message ??= 'Registration failed. Please check your details.';
+    }
+
+    return {
+      'success': success,
+      'data': body,
+      if (!success) 'message': message,
+      'status': res.statusCode,
+    };
+  }
 }

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'client_home.dart';
 import 'company_home.dart';
+import 'login_screen.dart'; // <-- added
 
 class RoleRouter extends StatelessWidget {
   const RoleRouter({super.key});
@@ -11,6 +12,11 @@ class RoleRouter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+
+    // ✅ Guard: if logged out, always go to Login
+    if (!auth.isLoggedIn) {
+      return const LoginScreen();
+    }
 
     // userType is non-nullable in AuthProvider, so no need for ??
     final type = auth.userType

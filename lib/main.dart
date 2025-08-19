@@ -79,13 +79,14 @@ class _AppShellState extends State<_AppShell> {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4A6CF7)),
         useMaterial3: true,
       ),
-      // Wrap logged-in pages with RoleChrome
+      // IMPORTANT: keep the app's Navigator by returning the `child`.
+      // Only wrap with RoleChrome when logged in.
       builder: (context, child) {
-        final w = child ?? const SizedBox.shrink();
-        if (!auth.isLoggedIn) return w;
-        return RoleChrome(child: w);
+        final w = child ?? const SizedBox.shrink(); // <-- this is the Navigator
+        if (!auth.isLoggedIn) return w; // logged out: no wrapper
+        return RoleChrome(child: w); // logged in: wrap
       },
-      // Decide screen from current auth state (no FutureBuilder, no spinner)
+      // Decide initial route based on auth state. Navigator comes from `home`.
       home: auth.isLoggedIn ? const RoleRouter() : const LoginScreen(),
     );
   }

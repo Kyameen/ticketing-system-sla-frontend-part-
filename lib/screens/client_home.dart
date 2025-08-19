@@ -46,18 +46,16 @@ class ClientHomeScreen extends StatelessWidget {
         ),
       );
 
-      // My Tickets (only tickets created by this user)
+      // Tickets (only tickets created by this user will show, scoped by backend)
       actions.add(
         HomeActionButton(
           icon: Icons.inbox_outlined,
-          label: 'My Tickets',
+          label: 'Tickets',
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const TicketListScreen(
-                  assignedToMe: true, // show only my tickets
-                ),
+                builder: (_) => const TicketListScreen(), // no flags
               ),
             );
           },
@@ -95,7 +93,7 @@ class ClientHomeScreen extends StatelessWidget {
               context,
               MaterialPageRoute(
                 builder: (_) => const TicketListScreen(
-                  assignedToMe: true, // only my tickets
+                  assignedToMe: true, // only my tickets (we'll revisit later)
                 ),
               ),
             );

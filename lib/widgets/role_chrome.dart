@@ -1,7 +1,7 @@
-// lib/widgets/role_chrome.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../screens/login_screen.dart';
 
 class RoleChrome extends StatelessWidget {
   final Widget child;
@@ -11,54 +11,39 @@ class RoleChrome extends StatelessWidget {
     if (s.isEmpty) return s;
     final p = s.replaceAll('_', ' ').split(' ');
     return p
-        .map(
-          (w) => w.isEmpty
-              ? w
-              : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}',
-        )
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
         .join(' ');
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
 
-    final greetName = auth.displayName.isNotEmpty
-        ? auth.displayName
-        : _titleCase(auth.userSubRole);
+    final crumb = [
+      if (auth.userType.isNotEmpty) _titleCase(auth.userType),
+      if (auth.userSubRole.isNotEmpty) _titleCase(auth.userSubRole),
+    ].join(' • ');
 
-    final crumb =
-        '${_titleCase(auth.userType)} / ${_titleCase(auth.userSubRole)}';
+    final greetName = (auth.displayName.isNotEmpty) ? auth.displayName : 'User';
 
     return Column(
       children: [
         // HEADER
         Material(
-          elevation: 1,
-          color: cs.surface,
+          color: Colors.transparent,
           child: SafeArea(
             bottom: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: cs.primaryContainer,
-                    child: Icon(
-                      Icons.badge,
-                      color: cs.onPrimaryContainer,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
+                  // Greeting
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Name — normal title size
                         Text(
                           'Hello, $greetName',
                           style: tt.titleLarge?.copyWith(
@@ -67,7 +52,6 @@ class RoleChrome extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
-                        // Small secondary line (role crumb)
                         Text(
                           crumb,
                           style: tt.bodySmall?.copyWith(
@@ -79,9 +63,19 @@ class RoleChrome extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Logout — compact outlined button, top-right
+                  // Logout
                   OutlinedButton.icon(
-                    onPressed: () => context.read<AuthProvider>().doLogout(),
+                    onPressed: () async {
+                      await context.read<AuthProvider>().doLogout();
+                      if (context.mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (_) => const LoginScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      }
+                    },
                     style: OutlinedButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(
@@ -101,7 +95,7 @@ class RoleChrome extends StatelessWidget {
         // CONTENT
         Expanded(child: child),
 
-        // FOOTER CRUMB — subtle chip centered, wrapped in Material to provide a Material ancestor
+        // FOOTER crumb
         Material(
           color: Colors.transparent,
           child: SafeArea(
@@ -110,14 +104,11 @@ class RoleChrome extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 8),
               child: Center(
                 child: Chip(
-                  label: Text(crumb, style: tt.labelMedium),
-                  avatar: Icon(
-                    Icons.verified_user_outlined,
-                    size: 16,
+                  label: Text(crumb.isEmpty ? 'Ticketing System' : crumb),
+                  labelStyle: tt.labelSmall?.copyWith(
                     color: cs.onSecondaryContainer,
                   ),
-                  // use opacity (0..1), not withAlpha(800)
-                  backgroundColor: cs.secondaryContainer.withAlpha(850),
+                  backgroundColor: cs.secondaryContainer.withAlpha(230),
                   shape: const StadiumBorder(),
                   labelPadding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
