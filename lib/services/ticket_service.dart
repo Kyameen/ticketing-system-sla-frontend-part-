@@ -1,3 +1,4 @@
+// lib/services/ticket_service.dart
 import 'dart:convert';
 
 import '../models/ticket.dart';
@@ -93,6 +94,12 @@ class TicketService {
     // ignore: avoid_print
     print('[TicketService] items=${parsed.length}');
     return parsed;
+  }
+
+  /// Alias for listMine() — backend scopes by role, so this returns
+  /// "all I’m allowed to see" (system/company see all; client_user sees own).
+  Future<List<Ticket>> listAll() async {
+    return listMine();
   }
 
   /// POST /tickets — create a ticket

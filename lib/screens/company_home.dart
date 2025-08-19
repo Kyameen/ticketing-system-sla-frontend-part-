@@ -26,19 +26,21 @@ class CompanyHomeScreen extends StatelessWidget {
 
     final actions = <Widget>[];
 
-    // Common: view tickets
-    actions.add(
-      HomeActionButton(
-        icon: Icons.list_alt_outlined,
-        label: 'Tickets',
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const TicketListScreen()),
-          );
-        },
-      ),
-    );
+    // Common: view tickets (NOT for company user)
+    if (!policy.isCompanyUser) {
+      actions.add(
+        HomeActionButton(
+          icon: Icons.list_alt_outlined,
+          label: 'Tickets',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const TicketListScreen()),
+            );
+          },
+        ),
+      );
+    }
 
     if (policy.isCompanyAdmin) {
       actions.addAll([

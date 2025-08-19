@@ -1,3 +1,4 @@
+// lib/providers/ticket_provider.dart
 import 'package:flutter/foundation.dart';
 
 import '../models/ticket.dart';
@@ -29,7 +30,7 @@ class TicketProvider extends ChangeNotifier {
     notifyListeners();
     try {
       // Server returns ALL (for system/company admin/manager) or scoped set per role.
-      items = await svc.listMine();
+      items = await svc.listAll();
     } finally {
       isLoading = false;
       notifyListeners();
@@ -37,14 +38,33 @@ class TicketProvider extends ChangeNotifier {
   }
 
   /// Load only tickets relevant to the current user.
-  /// For client_user the server returns only created_by = me.
+  /// - Company · User  -> trust backend (server already returns only "my" tickets)
+  /// - Client  · User  -> server scopes; also guard client-side by created_by == me
+  /// - Others          -> same as loadAll
   Future<void> loadMine() async {
     if (isLoading) return;
     isLoading = true;
     notifyListeners();
     try {
-      // Same endpoint; server decides based on logged-in role.
-      items = await svc.listMine();
+      final type = auth.userType;
+      final sub = auth.userSubRole;
+
+      // Company · User: don't apply any client-side filter.
+      if (type == 'company' && sub == 'User') {
+        items = await svc.listAll();
+        return;
+      }
+
+      // Client · User: keep server scope and apply a safe guard (created_by == me).
+      if (type == 'client' && sub == 'client_user') {
+        final all = await svc.listAll();
+        final uid = auth.userId;
+        items = all.where((t) => t.createdBy == uid).toList();
+        return;
+      }
+
+      // Others: fallback to all (server may scope by role)
+      items = await svc.listAll();
     } finally {
       isLoading = false;
       notifyListeners();
