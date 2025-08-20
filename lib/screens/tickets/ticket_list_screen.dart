@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/ticket_provider.dart';
 import '../../models/ticket.dart';
+import 'ticket_detail_screen.dart';
 
 class TicketListScreen extends StatefulWidget {
   /// Optional flags (display + loader selection)
@@ -170,7 +171,10 @@ class _TicketTile extends StatelessWidget {
           ],
         ),
         onTap: () {
-          // TODOs: push details when available
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => TicketDetailScreen(ticket: t)),
+          );
         },
       ),
     );

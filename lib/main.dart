@@ -12,6 +12,7 @@ import 'providers/ticket_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/role_router.dart';
 import 'widgets/role_chrome.dart';
+import 'utils/app_theme.dart';
 
 void main() {
   final api = ApiClient();
@@ -75,12 +76,14 @@ class _AppShellState extends State<_AppShell> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Ticketing System MVP',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4A6CF7)),
-        useMaterial3: true,
-      ),
-      // IMPORTANT: keep the app's Navigator by returning the `child`.
-      // Only wrap with RoleChrome when logged in.
+
+      // ---------- THEME (added) ----------
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      // Use light explicitly or switch to ThemeMode.system if you want auto dark.
+      themeMode: ThemeMode.light,
+
+      // -----------------------------------
       builder: (context, child) {
         final w = child ?? const SizedBox.shrink(); // <-- this is the Navigator
         if (!auth.isLoggedIn) return w; // logged out: no wrapper
