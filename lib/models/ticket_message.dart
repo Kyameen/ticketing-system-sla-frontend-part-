@@ -41,12 +41,18 @@ class TicketMessage {
       ticketId: toInt(j['ticket_id']),
       userId: toInt(j['user_id'] ?? j['created_by']),
       message: (j['message'] ?? '').toString(),
-      image: (j['image'] ?? '').toString().isEmpty
-          ? null
-          : (j['image'] as String),
-      imageUrl: (j['image_url'] ?? '').toString().isEmpty
-          ? null
-          : (j['image_url'] as String),
+      image: (() {
+        final v = j['image'];
+        if (v == null) return null;
+        final s = v.toString();
+        return s.isEmpty ? null : s;
+      })(),
+      imageUrl: (() {
+        final v = j['image_url'];
+        if (v == null) return null;
+        final s = v.toString();
+        return s.isEmpty ? null : s;
+      })(),
       createdAt: toDate(j['created_at']),
     );
   }

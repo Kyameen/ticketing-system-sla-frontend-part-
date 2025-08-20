@@ -25,25 +25,35 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   bool _loading = true;
   bool _sending = false;
+  String? _error; // <-- show API errors nicely
   List<TicketMessage> _items = [];
 
   @override
   void initState() {
     super.initState();
     _ticketId = widget.ticket.id ?? -1;
-    // Reuse ApiClient via TicketProvider
-    final api = context.read<TicketProvider>().svc.api;
+    final api = context
+        .read<TicketProvider>()
+        .svc
+        .api; // reuse same ApiClient/token
     _svc = TicketMessageService(api);
 
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final msgs = await _svc.list(_ticketId);
+      if (!mounted) return;
       setState(() => _items = msgs);
       _jumpToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -56,6 +66,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     setState(() => _sending = true);
     try {
       final m = await _svc.sendText(ticketId: _ticketId, message: text);
+      if (!mounted) return;
       setState(() {
         _items = [..._items, m];
         _controller.clear();
@@ -82,15 +93,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     });
   }
 
-  /// Keep this aligned with your RolePolicy. We only use getters that exist.
   bool _canSend(RolePolicy policy) {
+    // Allow clients + all company roles to send in the app.
     return policy.isClientUser ||
         policy.isClientManager ||
         policy.isCompanyAdmin ||
         policy.isCompanyManager ||
         policy.isCompanyUser;
-    // System roles: backend already enforces; if you want to allow in app later,
-    // add the proper RolePolicy getters and extend this condition.
   }
 
   @override
@@ -99,99 +108,120 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     final policy = RolePolicy(type: auth.userType, sub: auth.userSubRole);
     final me = auth.userId;
 
+    final cs = Theme.of(context).colorScheme;
+
+    Widget body;
+    if (_loading) {
+      body = const Center(child: CircularProgressIndicator());
+    } else if (_error != null) {
+      body = RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            const SizedBox(height: 120),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                _error!,
+                style: TextStyle(color: cs.error),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      body = RefreshIndicator(
+        onRefresh: _load,
+        child: _items.isEmpty
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 120),
+                  Center(child: Text('No messages yet')),
+                ],
+              )
+            : ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 16,
+                ),
+                itemCount: _items.length,
+                itemBuilder: (_, i) {
+                  final m = _items[i];
+                  final mine = (m.userId == me);
+
+                  final bubbleColor = mine
+                      // use withOpacity for widest compatibility
+                      ? cs.primary.withAlpha(120)
+                      : cs.surfaceContainerHighest;
+
+                  final bubble = Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: cs.outlineVariant, width: 0.6),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: mine
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      children: [
+                        if (m.message.isNotEmpty) Text(m.message),
+                        if (m.imageUrl != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Image.network(
+                              m.imageUrl!,
+                              height: 160,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        if (m.createdAt != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              m.createdAt!
+                                  .toLocal()
+                                  .toString()
+                                  .split('.')
+                                  .first,
+                              style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      mainAxisAlignment: mine
+                          ? MainAxisAlignment.end
+                          : MainAxisAlignment.start,
+                      children: [bubble],
+                    ),
+                  );
+                },
+              ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(widget.ticket.subject)),
       body: Column(
         children: [
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView.builder(
-                      controller: _scroll,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 16,
-                      ),
-                      itemCount: _items.length,
-                      itemBuilder: (_, i) {
-                        final m = _items[i];
-                        final mine = (m.userId == me);
-
-                        final bubbleColor = mine
-                            ? Theme.of(context).colorScheme.primary.withValues(
-                                alpha: 0.12,
-                              ) // avoids withOpacity lint
-                            : Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest;
-
-                        final bubble = Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          constraints: const BoxConstraints(maxWidth: 420),
-                          decoration: BoxDecoration(
-                            color: bubbleColor,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.outlineVariant,
-                              width: 0.6,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: mine
-                                ? CrossAxisAlignment.end
-                                : CrossAxisAlignment.start,
-                            children: [
-                              if (m.message.isNotEmpty) Text(m.message),
-                              if (m.imageUrl != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Image.network(
-                                    m.imageUrl!,
-                                    height: 160,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              if (m.createdAt != null)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    m.createdAt!
-                                        .toLocal()
-                                        .toString()
-                                        .split('.')
-                                        .first,
-                                    style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        );
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          child: Row(
-                            mainAxisAlignment: mine
-                                ? MainAxisAlignment.end
-                                : MainAxisAlignment.start,
-                            children: [bubble],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-          ),
+          Expanded(child: body),
           if (_canSend(policy))
             SafeArea(
               top: false,

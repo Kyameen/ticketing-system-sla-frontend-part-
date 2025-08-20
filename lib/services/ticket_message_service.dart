@@ -1,5 +1,6 @@
 // lib/services/ticket_message_service.dart
 import 'dart:convert';
+import 'dart:async';
 
 import '../models/ticket_message.dart';
 import 'api_client.dart';
@@ -10,12 +11,20 @@ class TicketMessageService {
 
   Future<List<TicketMessage>> list(int ticketId) async {
     final path = '/tickets/$ticketId/messages';
+    // DEBUG
     // ignore: avoid_print
     print('[TicketMessageService] GET $path');
 
-    final res = await api.get(path);
+    final res = await api.get(path).timeout(const Duration(seconds: 20));
+
+    // DEBUG
+    // ignore: avoid_print
+    print('[TicketMessageService] -> status=${res.statusCode}');
+    // ignore: avoid_print
+    print('[TicketMessageService] -> body=${res.body}');
 
     if (res.statusCode ~/ 100 != 2) {
+      // Propagate a readable error up to the UI
       throw Exception('Failed to fetch messages (${res.statusCode})');
     }
 
@@ -31,6 +40,11 @@ class TicketMessageService {
       raw = root;
     } else if (root is Map && root['data'] is List) {
       raw = root['data'];
+    } else if (root is Map &&
+        root['data'] is Map &&
+        (root['data']['messages'] is List)) {
+      // tolerate {"data":{"messages":[...]}}
+      raw = root['data']['messages'];
     } else {
       raw = const [];
     }
@@ -40,8 +54,8 @@ class TicketMessageService {
       if (e is Map) {
         try {
           out.add(TicketMessage.fromJson(Map<String, dynamic>.from(e)));
-        } catch (err) {
-          /* skip */
+        } catch (_) {
+          // skip bad rows
         }
       }
     }
@@ -55,7 +69,11 @@ class TicketMessageService {
     final path = '/tickets/$ticketId/messages';
     final body = {'message': message};
 
-    final res = await api.post(path, body);
+    final res = await api.post(path, body).timeout(const Duration(seconds: 20));
+
+    // DEBUG
+    // ignore: avoid_print
+    print('[TicketMessageService] POST $path -> ${res.statusCode}');
 
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception('Failed to send message (${res.statusCode})');
